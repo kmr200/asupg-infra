@@ -1,0 +1,90 @@
+services:
+  mongodb:
+    image: mongo:8.2.3
+    container_name: asupg-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
+      MONGO_INITDB_DATABASE: asupg
+    entrypoint:
+      - bash
+      - -c
+      - |
+        chmod 400 /etc/mongo-keyfile/mongo-keyfile && \
+        chown mongodb:mongodb /etc/mongo-keyfile/mongo-keyfile && \
+        exec docker-entrypoint.sh mongod \
+          --replSet rs0 \
+          --bind_ip_all \
+          --keyFile /etc/mongo-keyfile/mongo-keyfile
+    volumes:
+      - mongo-data:/data/db
+      - ./mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+      - ./mongo/keyfile/mongo-keyfile:/etc/mongo-keyfile/mongo-keyfile
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      asupg-network:
+
+  asupg-service:
+    image: shuhikjuriknarik/asupg-service:1.0.0
+    container_name: asupg-service
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      asupg-workers:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/api/asupg-service/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      security.jwt.secret: a;slkdfjanva;lsejtnakjsnvjal;sj;fd
+      mongodb.host: mongodb
+      mongodb.port: 27017
+      mongodb.database: asupg
+      mongodb.username: asupg_user
+      mongodb.password: asupg_pass
+      asupg-workers.url: asupg-workers:8081/api/asupg-workers
+    networks:
+      asupg-network:
+
+  asupg-workers:
+    image: shuhikjuriknarik/asupg-workers:1.0.0
+    container_name: asupg-workers
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/api/asupg-workers/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      mongodb.host: mongodb
+      mongodb.port: 27017
+      mongodb.database: asupg
+      mongodb.username: asupg_user
+      mongodb.password: asupg_pass
+      BANK_CLIENT_HOST: https://e-bank.ipakyulibank.uz
+      BANK_CLIENT_LOGIN: REMOTECON
+      BANK_CLIENT_PASSWORD: 123456Xx!
+      BANK_ACCOUNT: "20208000705484900001"
+    networks:
+      asupg-network:
+
+volumes:
+  mongo-data:
+
+networks:
+  asupg-network:
