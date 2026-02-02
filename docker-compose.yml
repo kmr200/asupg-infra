@@ -32,7 +32,7 @@ services:
       asupg-network:
 
   asupg-service:
-    image: shuhikjuriknarik/asupg-service:1.0.0
+    image: shuhikjuriknarik/asupg-service:1.0.1
     container_name: asupg-service
     restart: unless-stopped
     depends_on:
